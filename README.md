@@ -6,6 +6,8 @@ Terraform — all in the browser.
 
 > v0.1 — the architecture design studio. One-click deployment lands in v0.2.
 
+![KloudArch Studio — three-tier web app template with live Terraform](docs/screenshot.png)
+
 ## Features
 
 - **Drafting canvas** — drag 22 AWS-flavored components (compute, network,

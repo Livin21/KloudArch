@@ -7,6 +7,7 @@ import {
   FileCode2,
   LayoutTemplate,
   Plus,
+  Rocket,
   ShieldCheck,
   Sparkles,
   Waypoints,
@@ -39,6 +40,7 @@ function Nav() {
           <a href="#features" className="transition-colors hover:text-fg">Features</a>
           <a href="#workflow" className="transition-colors hover:text-fg">Workflow</a>
           <a href="#copilot" className="transition-colors hover:text-fg">Copilot</a>
+          <a href="#deploy" className="transition-colors hover:text-fg">Deploy</a>
         </nav>
         <div className="flex-1" />
         <a
@@ -89,7 +91,8 @@ function Hero() {
         >
           KloudArch is a studio for designing cloud architectures on a blueprint
           canvas — wire services together, let the AI copilot extend the design,
-          and ship Terraform that actually reflects the diagram.
+          then ship it: reviewable CloudFormation deploys straight from the
+          studio, portable Terraform when you&apos;d rather apply it yourself.
         </p>
 
         <div className="anim-rise mt-8 flex flex-wrap items-center gap-3" style={{ animationDelay: "240ms" }}>
@@ -153,8 +156,8 @@ function Hero() {
 function Stats() {
   const stats: [string, string][] = [
     ["22", "Cloud services"],
-    ["4", "Starter templates"],
-    ["6", "Copilot tools"],
+    ["2", "IaC formats, live"],
+    ["1-click", "Deploy & teardown"],
     ["MIT", "Licensed, self-hosted"],
   ];
   return (
@@ -186,8 +189,8 @@ const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
   },
   {
     icon: FileCode2,
-    title: "Terraform, live",
-    body: "Every edit regenerates main.tf. Connections become target groups, API integrations, event source mappings and CDN origins — not comments.",
+    title: "Live IaC, two dialects",
+    body: "Every edit regenerates main.tf and a deployable CloudFormation template. Connections become target groups, API integrations, event mappings and CDN origins — in both formats.",
   },
   {
     icon: Box,
@@ -299,22 +302,22 @@ function Workflow() {
               <span className="text-[#e3c47e]">&quot;aws_lb_target_group&quot;</span> …
             </pre>
           </div>
-          {/* 03 Apply */}
+          {/* 03 Deploy */}
           <div>
             <p className="outline-number font-mono text-6xl font-bold">03</p>
-            <h3 className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-amber">Apply</h3>
+            <h3 className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-amber">Deploy</h3>
             <p className="mt-2 text-[13px] leading-relaxed text-fg-dim">
-              Export and apply with your own credentials. One-click deployment
-              from the studio ships in v0.2.
+              Review the change set and deploy from the studio — or export the
+              IaC and apply it yourself. Teardown is one typed confirmation.
             </p>
             <div className="mt-5 flex h-36 flex-col justify-center gap-2 rounded-[4px] border border-line bg-deep p-4 font-mono text-[10.5px]">
               <p className="text-fg-dim">
-                <span className="text-accent">$</span> terraform init
+                change set: <span className="text-ok">6 add</span> ·{" "}
+                <span className="text-amber">0 modify</span> ·{" "}
+                <span className="text-danger">0 remove</span>
               </p>
-              <p className="text-fg-dim">
-                <span className="text-accent">$</span> terraform apply
-              </p>
-              <p className="text-ok">Apply complete! Resources: 13 added.</p>
+              <p className="text-fg-dim">WorkerFn… CREATE_IN_PROGRESS</p>
+              <p className="text-ok">CREATE_COMPLETE — stack deployed</p>
             </div>
           </div>
         </div>
@@ -393,6 +396,86 @@ function Copilot() {
   );
 }
 
+/* ── Deploy ───────────────────────────────────────────────────────────── */
+
+function Deploy() {
+  const changes: [string, string, string][] = [
+    ["ADD", "WorkerFn", "AWS::Lambda::Function"],
+    ["ADD", "JobsQueue", "AWS::SQS::Queue"],
+    ["ADD", "ItemsTable", "AWS::DynamoDB::Table"],
+    ["MODIFY", "ApiHandler", "AWS::Lambda::Function"],
+  ];
+  return (
+    <section id="deploy" className="scroll-mt-20 border-t border-line bg-panel/40">
+      <div className="mx-auto max-w-6xl px-5 py-24">
+        <div className="grid items-center gap-12 lg:grid-cols-2">
+          {/* Change-set mock */}
+          <div className="order-2 rounded-[4px] border border-line bg-panel p-5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] lg:order-1">
+            <div className="mb-3 flex items-center gap-2 border-b border-line pb-3">
+              <Rocket size={12} className="text-amber" />
+              <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-fg-faint">
+                change set · kloudarch-serverless-api
+              </span>
+            </div>
+            <ul className="divide-y divide-line rounded-[3px] border border-line bg-ink">
+              {changes.map(([action, id, type]) => (
+                <li key={id} className="flex items-center gap-3 px-3 py-2 font-mono text-[10px]">
+                  <span className={`w-12 shrink-0 ${action === "ADD" ? "text-ok" : "text-amber"}`}>
+                    {action}
+                  </span>
+                  <span className="text-fg">{id}</span>
+                  <span className="ml-auto truncate text-fg-faint">{type}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 space-y-1 font-mono text-[9.5px]">
+              <p className="text-fg-faint">10:46:51 WorkerFn CREATE_IN_PROGRESS</p>
+              <p className="text-fg-faint">10:47:12 WorkerFn <span className="text-ok">CREATE_COMPLETE</span></p>
+              <p className="text-ok">10:47:40 kloudarch-serverless-api CREATE_COMPLETE</p>
+            </div>
+            <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
+              <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-fg-faint">
+                outputs: ApiEndpoint · BucketName
+              </span>
+              <span className="inline-flex h-8 items-center gap-1.5 rounded-[3px] bg-amber px-4 text-[11.5px] font-semibold text-ink">
+                <Rocket size={12} />
+                Deploy 4 changes
+              </span>
+            </div>
+          </div>
+
+          <div className="order-1 lg:order-2">
+            <p className="u-label !text-accent">Fig. 03 — Deploy</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-fg md:text-4xl">
+              From sheet to stack.
+            </h2>
+            <p className="mt-5 max-w-md text-[14px] leading-relaxed text-fg-dim">
+              Hit Deploy and the studio computes a CloudFormation change set —
+              every add, modify and remove laid out for review before anything
+              touches your account. Approve it, and AWS executes natively while
+              stack events stream back live. Outputs land in the studio;
+              teardown is one typed confirmation away.
+            </p>
+            <ul className="mt-6 max-w-md space-y-2 text-[12.5px] text-fg-dim">
+              {[
+                "Your AWS credentials, server-side env only — never in the browser",
+                "Re-deploys diff against the existing stack, not from scratch",
+                "Failing design checks gate the deploy until acknowledged",
+                "Disabled by default on shared instances — self-hosting stays safe",
+              ].map((line) => (
+                <li key={line} className="flex items-start gap-2">
+                  <Check size={13} className="mt-0.5 shrink-0 text-ok" />
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ── Open source CTA + footer ─────────────────────────────────────────── */
 
 function OpenSource() {
@@ -459,6 +542,7 @@ export default function LandingPage() {
         <Features />
         <Workflow />
         <Copilot />
+        <Deploy />
         <OpenSource />
       </main>
       <Footer />

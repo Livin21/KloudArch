@@ -1,8 +1,8 @@
 {
   "name": "kloudarch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": false,
-  "description": "Open-source cloud architecture design studio — visual canvas editor, AI copilot, Terraform export.",
+  "description": "Open-source cloud architecture design studio — visual canvas editor, AI copilot, live Terraform + CloudFormation, one-click deploy.",
   "license": "MIT",
   "scripts": {
     "dev": "next dev",

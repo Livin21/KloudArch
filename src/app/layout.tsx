@@ -12,11 +12,11 @@ export const metadata: Metadata = {
     template: "%s",
   },
   description:
-    "Design cloud architectures on a blueprint canvas, refine them with an AI copilot, and export working Terraform. Open source, MIT licensed, bring your own model.",
+    "Design cloud architectures on a blueprint canvas, refine them with an AI copilot, and ship them — reviewable CloudFormation deploys or portable Terraform export. Open source, MIT licensed, bring your own keys.",
   openGraph: {
     title: "KloudArch — Open-source cloud architecture studio",
     description:
-      "Design cloud architectures on a blueprint canvas, refine them with an AI copilot, and export working Terraform.",
+      "Design cloud architectures on a blueprint canvas, refine them with an AI copilot, and ship them — reviewable CloudFormation deploys or portable Terraform export.",
     images: ["/og.jpg"],
     type: "website",
   },

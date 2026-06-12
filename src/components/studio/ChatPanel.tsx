@@ -73,7 +73,7 @@ function ToolChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
 }
 
 type ProviderMeta =
-  | { configured: false }
+  | { configured: false; disabled?: boolean }
   | { configured: true; provider: string; model: string };
 
 export default function ChatPanel() {
@@ -145,13 +145,40 @@ export default function ChatPanel() {
             ? "checking model…"
             : meta.configured
               ? `${meta.provider} · ${meta.model}`
-              : "no model configured"}
+              : meta.disabled
+                ? "copilot off on this instance"
+                : "no model configured"}
         </span>
       </div>
 
       {/* Messages */}
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3.5">
-        {meta?.configured === false && (
+        {meta?.configured === false && meta.disabled && (
+          <div className="rounded-[3px] border border-accent/30 bg-accent/5 p-3.5">
+            <p className="u-label mb-2 !text-accent">Hosted instance — copilot off</p>
+            <p className="text-[11.5px] leading-relaxed text-fg-dim">
+              The AI copilot is switched off on this shared deployment so it
+              can&apos;t spend anyone&apos;s API credits. Everything else works —
+              canvas, templates, Terraform export.
+            </p>
+            <p className="mt-2.5 text-[11.5px] leading-relaxed text-fg-dim">
+              To use the copilot, self-host KloudArch with your own key:
+            </p>
+            <pre className="mt-2 overflow-x-auto rounded-[2px] border border-line bg-ink p-2.5 font-mono text-[10px] leading-relaxed text-fg-dim">
+              {"git clone github.com/Livin21/KloudArch.git\ncp .env.example .env.local   # add your key\nnpm install && npm run dev"}
+            </pre>
+            <a
+              href="https://github.com/Livin21/KloudArch"
+              target="_blank"
+              rel="noreferrer"
+              className="u-btn mt-3 w-full justify-center !text-[11.5px]"
+            >
+              Self-host from GitHub →
+            </a>
+          </div>
+        )}
+
+        {meta?.configured === false && !meta.disabled && (
           <div className="rounded-[3px] border border-amber/40 bg-amber/5 p-3.5">
             <p className="u-label mb-2 !text-amber">Bring your own model</p>
             <p className="text-[11.5px] leading-relaxed text-fg-dim">
@@ -237,7 +264,9 @@ export default function ChatPanel() {
             className="max-h-32 min-h-[40px] flex-1 resize-none bg-transparent px-1 text-[12.5px] text-fg outline-none placeholder:text-fg-faint"
             placeholder={
               meta?.configured === false
-                ? "configure an API key to chat…"
+                ? meta.disabled
+                  ? "copilot disabled — self-host to enable…"
+                  : "configure an API key to chat…"
                 : "describe a change to the design…"
             }
             value={input}

@@ -18,6 +18,12 @@ export const maxDuration = 60;
 
 type ProviderId = "anthropic" | "openai" | "google" | "gateway";
 
+/** Kill-switch for shared/public deployments so visitors can't spend the host's credits. */
+function chatDisabled(): boolean {
+  const v = process.env.AI_CHAT_DISABLED?.toLowerCase();
+  return v === "1" || v === "true";
+}
+
 const DEFAULT_MODELS: Record<ProviderId, string> = {
   anthropic: "claude-sonnet-4-6",
   openai: "gpt-5.5",
@@ -150,6 +156,7 @@ ${JSON.stringify(design ?? { nodes: [], edges: [] })}`;
 /* ── handlers ─────────────────────────────────────────────────────────── */
 
 export async function GET() {
+  if (chatDisabled()) return Response.json({ configured: false, disabled: true });
   const resolved = resolveProvider();
   if (!resolved) return Response.json({ configured: false });
   return Response.json({
@@ -160,6 +167,15 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  if (chatDisabled()) {
+    return Response.json(
+      {
+        error:
+          "The AI copilot is disabled on this hosted instance. Self-host KloudArch with your own API key to enable it — see github.com/Livin21/KloudArch.",
+      },
+      { status: 503 },
+    );
+  }
   const resolved = resolveProvider();
   if (!resolved) {
     return Response.json(

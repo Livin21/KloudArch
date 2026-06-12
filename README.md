@@ -59,6 +59,7 @@ cp .env.example .env.local
 | `AI_GATEWAY_API_KEY` | Vercel AI Gateway, default `anthropic/claude-sonnet-4.6` |
 | `AI_PROVIDER` *(optional)* | force `anthropic` / `openai` / `google` / `gateway` |
 | `AI_MODEL` *(optional)* | override the default model id |
+| `AI_CHAT_DISABLED` *(optional)* | set to `1` on public deployments to switch the copilot off (visitors are pointed to self-hosting instead) |
 
 Keys never leave your server: the browser talks to `/api/chat`, which calls
 the provider with the key from your environment.

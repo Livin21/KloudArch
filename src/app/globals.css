@@ -22,10 +22,13 @@
   --color-ok: #3fdfa0;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 html,
 body {
   height: 100%;
-  overflow: hidden;
 }
 
 body {
@@ -236,4 +239,32 @@ body::after {
 
 .react-flow__node {
   font-family: var(--font-sans);
+}
+
+/* ── Marketing site ─────────────────────────────────────────────────── */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.anim-rise {
+  animation: rise 0.8s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.bp-grid {
+  background-image:
+    linear-gradient(rgba(83, 199, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(83, 199, 255, 0.045) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.outline-number {
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(83, 199, 255, 0.45);
 }

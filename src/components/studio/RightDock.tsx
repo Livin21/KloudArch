@@ -25,10 +25,12 @@ export default function RightDock() {
   const [resizing, setResizing] = useState(false);
   const drag = useRef({ startX: 0, startWidth: DEFAULT_WIDTH });
 
-  // Load the saved width after mount (avoids SSR hydration mismatch).
+  // Load the saved width after mount. SSR must render the default, so the
+  // one-time post-hydration setState is deliberate (single re-render, no cascade).
   useEffect(() => {
     const saved = Number(window.localStorage.getItem(WIDTH_KEY));
     if (Number.isFinite(saved) && saved >= MIN_WIDTH && saved <= MAX_WIDTH) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setWidth(saved);
     }
   }, []);

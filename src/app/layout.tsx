@@ -6,9 +6,20 @@ const saira = Saira({ subsets: ["latin"], variable: "--font-saira" });
 const chivoMono = Chivo_Mono({ subsets: ["latin"], variable: "--font-chivo" });
 
 export const metadata: Metadata = {
-  title: "KloudArch Studio — Cloud Architecture Designer",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  title: {
+    default: "KloudArch — Open-source cloud architecture studio",
+    template: "%s",
+  },
   description:
-    "Open-source studio to design cloud architectures on a visual canvas, refine them with an AI copilot, and export Terraform.",
+    "Design cloud architectures on a blueprint canvas, refine them with an AI copilot, and export working Terraform. Open source, MIT licensed, bring your own model.",
+  openGraph: {
+    title: "KloudArch — Open-source cloud architecture studio",
+    description:
+      "Design cloud architectures on a blueprint canvas, refine them with an AI copilot, and export working Terraform.",
+    images: ["/og.jpg"],
+    type: "website",
+  },
 };
 
 export default function RootLayout({

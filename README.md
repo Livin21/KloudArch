@@ -1,8 +1,14 @@
-# KloudArch Studio
+<p align="center">
+  <img src="docs/logo.svg" width="92" alt="KloudArch logo" />
+</p>
 
-**Open-source cloud architecture design studio.** Draft architectures on a
-blueprint-style canvas, refine them with an AI copilot, and export working
-Terraform — all in the browser.
+<h1 align="center">KloudArch</h1>
+
+<p align="center">
+  <b>Open-source cloud architecture design studio.</b><br/>
+  Draft architectures on a blueprint canvas, refine them with an AI copilot,<br/>
+  and export working Terraform — all in the browser.
+</p>
 
 > v0.1 — the architecture design studio. One-click deployment lands in v0.2.
 
@@ -35,7 +41,8 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 — the studio works fully without any configuration.
+Open http://localhost:3000 for the landing page, or jump straight into the
+studio at http://localhost:3000/studio — it works fully without any configuration.
 
 ### Enable the AI copilot
 

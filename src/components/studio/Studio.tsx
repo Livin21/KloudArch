@@ -62,7 +62,7 @@ export default function Studio() {
 
   return (
     <ReactFlowProvider>
-      <div className="flex h-screen flex-col bg-ink">
+      <div className="flex h-screen flex-col overflow-hidden bg-ink">
         <TopBar />
         <div className="flex min-h-0 flex-1">
           <Palette />

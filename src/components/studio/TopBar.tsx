@@ -14,7 +14,9 @@ import {
   Upload,
   Waypoints,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { LogoLockup } from "@/components/Logo";
 import { serializeProject, useDesignStore } from "@/lib/store";
 import { generateTerraform } from "@/lib/terraform";
 
@@ -86,31 +88,9 @@ export default function TopBar() {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-panel px-3">
       {/* Wordmark */}
-      <div className="flex items-center gap-2.5 pr-1">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path
-            d="M12 2 21 7v10l-9 5-9-5V7l9-5Z"
-            stroke="var(--color-accent)"
-            strokeWidth="1.4"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M12 10.2V6M13.6 13l3.6 2M10.4 13l-3.6 2"
-            stroke="var(--color-accent)"
-            strokeWidth="1.1"
-          />
-          <circle cx="12" cy="6" r="1.4" fill="var(--color-accent)" />
-          <circle cx="17.2" cy="15" r="1.4" fill="var(--color-accent)" />
-          <circle cx="6.8" cy="15" r="1.4" fill="var(--color-accent)" />
-          <circle cx="12" cy="12" r="1.8" fill="var(--color-amber)" />
-        </svg>
-        <span className="text-[13px] font-bold tracking-[0.22em] text-fg">
-          KLOUDARCH
-        </span>
-        <span className="rounded-[2px] border border-line px-1.5 py-0.5 font-mono text-[8.5px] tracking-[0.14em] text-fg-faint">
-          STUDIO 0.1
-        </span>
-      </div>
+      <Link href="/" className="pr-1" title="KloudArch home">
+        <LogoLockup markSize={24} tag="STUDIO 0.1" />
+      </Link>
 
       <span className="h-5 w-px bg-line" />
 

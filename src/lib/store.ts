@@ -80,6 +80,8 @@ type DesignStore = {
   arrange: () => void;
 
   // misc
+  /** Select exactly these nodes (no history entry — selection isn't undoable). */
+  selectOnly: (ids: string[]) => void;
   findNode: (ref: string) => DesignNode | undefined;
   setProjectName: (name: string) => void;
   setRegion: (region: string) => void;
@@ -348,6 +350,12 @@ export const useDesignStore = create<DesignStore>((set, get) => ({
     get().commit();
     set((s) => ({ nodes: layoutNodes(s.nodes, s.edges), fitSignal: s.fitSignal + 1 }));
   },
+
+  selectOnly: (ids) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) => ({ ...n, selected: ids.includes(n.id) })),
+      edges: s.edges.map((e) => ({ ...e, selected: false })),
+    })),
 
   findNode: (ref) => {
     const { nodes } = get();

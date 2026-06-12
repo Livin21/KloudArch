@@ -1,9 +1,28 @@
 "use client";
 
-import { ArrowRight, Copy, Trash2, X } from "lucide-react";
+import { ArrowRight, CircleCheck, Copy, Info, Trash2, TriangleAlert, X } from "lucide-react";
+import { useMemo } from "react";
 import { CATEGORIES, CATEGORY_ORDER, SERVICE_MAP, type ServiceField } from "@/lib/catalog";
 import { REGIONS, useDesignStore } from "@/lib/store";
 import type { ConfigValue, DesignNode } from "@/lib/types";
+import { validateDesign, type Lint } from "@/lib/validate";
+
+function LintRow({ lint, onClick }: { lint: Lint; onClick?: () => void }) {
+  const warn = lint.severity === "warn";
+  const Icon = warn ? TriangleAlert : Info;
+  return (
+    <button
+      onClick={onClick}
+      disabled={!onClick}
+      className={`flex w-full items-start gap-2 rounded-[2px] border px-2.5 py-2 text-left transition-colors ${
+        warn ? "border-amber/30 bg-amber/5" : "border-line bg-ink"
+      } ${onClick ? "hover:border-line-bright" : "cursor-default"}`}
+    >
+      <Icon size={12} className={`mt-0.5 shrink-0 ${warn ? "text-amber" : "text-accent"}`} />
+      <span className="text-[11px] leading-snug text-fg-dim">{lint.message}</span>
+    </button>
+  );
+}
 
 function Field({
   node,
@@ -135,6 +154,7 @@ function NodeInspector({ node }: { node: DesignNode }) {
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+        <NodeLints node={node} />
         {svc.fields.map((field) => (
           <Field key={field.key} node={node} field={field} />
         ))}
@@ -205,12 +225,33 @@ function NodeInspector({ node }: { node: DesignNode }) {
   );
 }
 
+function NodeLints({ node }: { node: DesignNode }) {
+  const nodes = useDesignStore((s) => s.nodes);
+  const edges = useDesignStore((s) => s.edges);
+  const lints = useMemo(
+    () => validateDesign(nodes, edges).filter((l) => l.nodeIds.includes(node.id)),
+    [nodes, edges, node.id],
+  );
+  if (lints.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      {lints.map((lint) => (
+        <LintRow key={lint.id} lint={lint} />
+      ))}
+    </div>
+  );
+}
+
 function ProjectInspector() {
   const projectName = useDesignStore((s) => s.projectName);
   const setProjectName = useDesignStore((s) => s.setProjectName);
   const region = useDesignStore((s) => s.region);
   const setRegion = useDesignStore((s) => s.setRegion);
   const nodes = useDesignStore((s) => s.nodes);
+  const edges = useDesignStore((s) => s.edges);
+  const selectOnly = useDesignStore((s) => s.selectOnly);
+
+  const lints = useMemo(() => validateDesign(nodes, edges), [nodes, edges]);
 
   const counts = CATEGORY_ORDER.map((cat) => ({
     cat,
@@ -248,6 +289,24 @@ function ProjectInspector() {
           Used as the provider region in generated Terraform.
         </span>
       </div>
+
+      {nodes.length > 0 && (
+        <div>
+          <span className="u-label mb-2 block">Design checks · {lints.length}</span>
+          {lints.length === 0 ? (
+            <p className="flex items-center gap-2 rounded-[2px] border border-ok/30 bg-ok/5 px-2.5 py-2 text-[11px] text-ok">
+              <CircleCheck size={12} />
+              All checks pass — the Terraform has no derivation gaps.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {lints.map((lint) => (
+                <LintRow key={lint.id} lint={lint} onClick={() => selectOnly(lint.nodeIds)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {counts.length > 0 && (
         <div>

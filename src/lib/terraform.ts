@@ -53,7 +53,7 @@ function rectOf(zone: DesignNode): { x: number; y: number; w: number; h: number 
   };
 }
 
-function contains(zone: DesignNode, node: DesignNode): boolean {
+export function contains(zone: DesignNode, node: DesignNode): boolean {
   if (zone.id === node.id) return false;
   const r = rectOf(zone);
   const c = centerOf(node);

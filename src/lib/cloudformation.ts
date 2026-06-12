@@ -61,8 +61,13 @@ type Ctx = {
   out: (nodeId: string, serviceId?: string) => DesignNode[];
   inn: (nodeId: string, serviceId?: string) => DesignNode[];
   zone: (node: DesignNode, serviceId: "vpc" | "subnet") => DesignNode | undefined;
-  /** All subnets inside the same VPC as the given node (for ALB subnet lists). */
-  vpcSubnets: (node: DesignNode) => DesignNode[];
+  /** Every node of a given service on the canvas. */
+  nodesOf: (serviceId: string) => DesignNode[];
+  /**
+   * Subnets in this node's VPC, deduped by AZ (load balancers reject same-AZ
+   * pairs). publicOnly filters to visibility=public.
+   */
+  vpcSubnets: (node: DesignNode, opts?: { publicOnly?: boolean }) => DesignNode[];
   res: (logicalId: string, resource: Cfn) => void;
   once: (logicalId: string, make: () => Cfn) => string;
   param: (name: string, def: Cfn) => string;
@@ -107,6 +112,102 @@ const EMITTERS: Record<string, Emitter> = {
     });
   },
 
+  "internet-gateway": (n, ctx) => {
+    const vpc = ctx.zone(n, "vpc");
+    if (!vpc) return; // surfaced as a deploy warning
+    const lid = ctx.lid(n.id);
+    const vlid = ctx.lid(vpc.id);
+    ctx.res(lid, { Type: "AWS::EC2::InternetGateway", Properties: { Tags: [{ Key: "Name", Value: n.data.label }] } });
+    ctx.res(`${lid}Attachment`, {
+      Type: "AWS::EC2::VPCGatewayAttachment",
+      Properties: { VpcId: ref(vlid), InternetGatewayId: ref(lid) },
+    });
+    // Derived glue: one public route table per VPC.
+    ctx.once(`${vlid}PublicRouteTable`, () => ({
+      Type: "AWS::EC2::RouteTable",
+      Properties: { VpcId: ref(vlid), Tags: [{ Key: "Name", Value: `${vpc.data.label} public` }] },
+    }));
+    ctx.once(`${vlid}PublicRoute`, () => ({
+      Type: "AWS::EC2::Route",
+      DependsOn: [`${lid}Attachment`],
+      Properties: {
+        RouteTableId: ref(`${vlid}PublicRouteTable`),
+        DestinationCidrBlock: "0.0.0.0/0",
+        GatewayId: ref(lid),
+      },
+    }));
+    ctx
+      .nodesOf("subnet")
+      .filter((s) => contains(vpc, s) && s.data.config?.visibility === "public")
+      .forEach((s) => {
+        ctx.once(`${ctx.lid(s.id)}PublicAssoc`, () => ({
+          Type: "AWS::EC2::SubnetRouteTableAssociation",
+          Properties: { SubnetId: ref(ctx.lid(s.id)), RouteTableId: ref(`${vlid}PublicRouteTable`) },
+        }));
+      });
+  },
+
+  "nat-gateway": (n, ctx) => {
+    const subnet = ctx.zone(n, "subnet");
+    const vpc = subnet ? ctx.zone(subnet, "vpc") : ctx.zone(n, "vpc");
+    if (!subnet || !vpc) return; // surfaced as a deploy warning
+    const lid = ctx.lid(n.id);
+    const vlid = ctx.lid(vpc.id);
+    const az = String(subnet.data.config?.az ?? "a");
+    const azKey = az.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const igw = ctx.nodesOf("internet-gateway").find((g) => contains(vpc, g));
+
+    ctx.res(`${lid}Eip`, {
+      Type: "AWS::EC2::EIP",
+      ...(igw ? { DependsOn: [`${ctx.lid(igw.id)}Attachment`] } : {}),
+      Properties: { Domain: "vpc" },
+    });
+    ctx.res(lid, {
+      Type: "AWS::EC2::NatGateway",
+      Properties: {
+        SubnetId: ref(ctx.lid(subnet.id)),
+        AllocationId: att(`${lid}Eip`, "AllocationId"),
+        Tags: [{ Key: "Name", Value: n.data.label }],
+      },
+    });
+
+    // Private route table per (VPC, AZ-of-this-NAT); see terraform.ts twin
+    // for the AZ-match + first-NAT-fallback association rule.
+    const rtId = `${vlid}PrivateRouteTable${azKey}`;
+    ctx.once(rtId, () => ({
+      Type: "AWS::EC2::RouteTable",
+      Properties: { VpcId: ref(vlid), Tags: [{ Key: "Name", Value: `${vpc.data.label} private ${az}` }] },
+    }));
+    ctx.once(`${rtId}Route`, () => ({
+      Type: "AWS::EC2::Route",
+      Properties: {
+        RouteTableId: ref(rtId),
+        DestinationCidrBlock: "0.0.0.0/0",
+        NatGatewayId: ref(lid),
+      },
+    }));
+    const natsInVpc = ctx.nodesOf("nat-gateway").filter((g) => contains(vpc, g));
+    const natAz = (g: DesignNode) => {
+      const gs = ctx.zone(g, "subnet");
+      return String(gs?.data.config?.az ?? "a");
+    };
+    const isFirstNat = natsInVpc[0]?.id === n.id;
+    ctx
+      .nodesOf("subnet")
+      .filter((s) => contains(vpc, s) && s.data.config?.visibility !== "public")
+      .filter((s) => {
+        const saz = String(s.data.config?.az ?? "a");
+        if (saz === az) return true;
+        return !natsInVpc.some((g) => natAz(g) === saz) && isFirstNat;
+      })
+      .forEach((s) => {
+        ctx.once(`${ctx.lid(s.id)}PrivateAssoc`, () => ({
+          Type: "AWS::EC2::SubnetRouteTableAssociation",
+          Properties: { SubnetId: ref(ctx.lid(s.id)), RouteTableId: ref(rtId) },
+        }));
+      });
+  },
+
   ec2: (n, ctx) => {
     const ami = ctx.param("Al2023AmiId", {
       Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
@@ -116,6 +217,14 @@ const EMITTERS: Record<string, Emitter> = {
     const subnet = ctx.zone(n, "subnet");
     const count = Math.min(num(n, "count", 1), 20);
     const base = ctx.lid(n.id);
+    const alb = ctx.inn(n.id, "alb")[0];
+    const albHasVpc =
+      alb &&
+      (ctx.zone(alb, "vpc") ??
+        (() => {
+          const s = ctx.zone(alb, "subnet");
+          return s ? ctx.zone(s, "vpc") : undefined;
+        })());
     for (let i = 1; i <= count; i++) {
       ctx.res(count > 1 ? `${base}${i}` : base, {
         Type: "AWS::EC2::Instance",
@@ -123,6 +232,7 @@ const EMITTERS: Record<string, Emitter> = {
           ImageId: ref(ami),
           InstanceType: String(cfg(n, "instance_type")),
           ...(subnet ? { SubnetId: ref(ctx.lid(subnet.id)) } : {}),
+          ...(albHasVpc ? { SecurityGroupIds: [ref(`${ctx.lid(alb.id)}TargetsSecurityGroup`)] } : {}),
           Tags: [{ Key: "Name", Value: count > 1 ? `${n.data.label} ${i}` : n.data.label }],
         },
       });
@@ -181,6 +291,14 @@ const EMITTERS: Record<string, Emitter> = {
       env[`EVENT_BUS${i > 0 ? `_${i + 1}` : ""}`] = att(ctx.lid(t.id), "Name");
       ctx.lambdaPolicy({ Effect: "Allow", Action: "events:PutEvents", Resource: att(ctx.lid(t.id), "Arn") });
     });
+    ctx.out(n.id, "kinesis").forEach((t, i) => {
+      env[`STREAM_NAME${i > 0 ? `_${i + 1}` : ""}`] = ref(ctx.lid(t.id));
+      ctx.lambdaPolicy({
+        Effect: "Allow",
+        Action: ["kinesis:PutRecord", "kinesis:PutRecords"],
+        Resource: att(ctx.lid(t.id), "Arn"),
+      });
+    });
 
     ctx.res(lid, {
       Type: "AWS::Lambda::Function",
@@ -209,6 +327,31 @@ const EMITTERS: Record<string, Emitter> = {
           EventSourceArn: att(ctx.lid(q.id), "Arn"),
           FunctionName: ref(lid),
           BatchSize: 10,
+        },
+      });
+    });
+
+    // Stream → function event source mappings (edge: kinesis → lambda).
+    ctx.inn(n.id, "kinesis").forEach((k) => {
+      ctx.lambdaPolicy({
+        Effect: "Allow",
+        Action: [
+          "kinesis:DescribeStream",
+          "kinesis:DescribeStreamSummary",
+          "kinesis:GetRecords",
+          "kinesis:GetShardIterator",
+          "kinesis:ListShards",
+          "kinesis:ListStreams",
+        ],
+        Resource: att(ctx.lid(k.id), "Arn"),
+      });
+      ctx.res(`${ctx.lid(k.id)}To${lid}`, {
+        Type: "AWS::Lambda::EventSourceMapping",
+        Properties: {
+          EventSourceArn: att(ctx.lid(k.id), "Arn"),
+          FunctionName: ref(lid),
+          StartingPosition: "LATEST",
+          BatchSize: 100,
         },
       });
     });
@@ -265,6 +408,14 @@ const EMITTERS: Record<string, Emitter> = {
                 AwsvpcConfiguration: {
                   Subnets: [ref(ctx.lid(subnet.id))],
                   AssignPublicIp: isPublic ? "ENABLED" : "DISABLED",
+                  ...(albs.length &&
+                  (ctx.zone(albs[0], "vpc") ??
+                    (() => {
+                      const as = ctx.zone(albs[0], "subnet");
+                      return as ? ctx.zone(as, "vpc") : undefined;
+                    })())
+                    ? { SecurityGroups: [ref(`${ctx.lid(albs[0].id)}TargetsSecurityGroup`)] }
+                    : {}),
                 },
               },
             }
@@ -287,8 +438,14 @@ const EMITTERS: Record<string, Emitter> = {
 
   alb: (n, ctx) => {
     const lid = ctx.lid(n.id);
-    const subnets = ctx.vpcSubnets(n);
-    const vpc = ctx.zone(n, "vpc") ?? (subnets[0] ? ctx.zone(subnets[0], "vpc") : undefined);
+    const internal = cfg(n, "scheme") === "internal";
+    const subnets = ctx.vpcSubnets(n, { publicOnly: !internal });
+    const vpc =
+      ctx.zone(n, "vpc") ??
+      (() => {
+        const s = ctx.zone(n, "subnet");
+        return s ? ctx.zone(s, "vpc") : undefined;
+      })();
 
     if (vpc) {
       ctx.res(`${lid}SecurityGroup`, {
@@ -302,6 +459,21 @@ const EMITTERS: Record<string, Emitter> = {
           ],
         },
       });
+      ctx.res(`${lid}TargetsSecurityGroup`, {
+        Type: "AWS::EC2::SecurityGroup",
+        Properties: {
+          GroupDescription: `Targets reachable from ${n.data.label}`,
+          VpcId: ref(ctx.lid(vpc.id)),
+          SecurityGroupIngress: [
+            {
+              IpProtocol: "tcp",
+              FromPort: 80,
+              ToPort: 80,
+              SourceSecurityGroupId: ref(`${lid}SecurityGroup`),
+            },
+          ],
+        },
+      });
     }
 
     ctx.res(lid, {
@@ -312,6 +484,10 @@ const EMITTERS: Record<string, Emitter> = {
         Subnets: subnets.map((s) => ref(ctx.lid(s.id))),
         ...(vpc ? { SecurityGroups: [ref(`${lid}SecurityGroup`)] } : {}),
       },
+      // Internet-facing ALBs need the IGW route in place before creation.
+      ...(ctx.nodesOf("internet-gateway").some((g) => vpc && contains(vpc, g)) && !internal
+        ? { DependsOn: [`${ctx.lid(vpc!.id)}PublicRoute`] }
+        : {}),
     });
 
     const ec2Targets = ctx.out(n.id, "ec2");
@@ -336,14 +512,25 @@ const EMITTERS: Record<string, Emitter> = {
       },
     });
 
-    // HTTPS needs an ACM certificate the design can't provide — deploy HTTP
-    // and surface the substitution as a deploy warning.
+    // Real HTTPS when a cert is connected; otherwise HTTP (surfaced as a
+    // deploy warning when HTTPS was requested without a certificate).
+    const cert = ctx.inn(n.id, "acm-cert")[0];
+    const https = cfg(n, "protocol") === "HTTPS" && !!cert;
     ctx.res(`${lid}Listener`, {
       Type: "AWS::ElasticLoadBalancingV2::Listener",
       Properties: {
         LoadBalancerArn: ref(lid),
-        Port: cfg(n, "protocol") === "HTTPS" ? 80 : num(n, "listener_port", 80),
-        Protocol: "HTTP",
+        ...(https
+          ? {
+              Port: 443,
+              Protocol: "HTTPS",
+              SslPolicy: "ELBSecurityPolicy-TLS13-1-2-2021-06",
+              Certificates: [{ CertificateArn: ref(ctx.lid(cert.id)) }],
+            }
+          : {
+              Port: cfg(n, "protocol") === "HTTPS" ? 80 : num(n, "listener_port", 80),
+              Protocol: "HTTP",
+            }),
         DefaultActions: [{ Type: "forward", TargetGroupArn: ref(`${lid}TargetGroup`) }],
       },
     });
@@ -467,6 +654,9 @@ const EMITTERS: Record<string, Emitter> = {
     const waf = ctx.inn(n.id, "waf").find(
       (w) => cfg(w, "scope") === "CLOUDFRONT" && ctx.region === "us-east-1",
     );
+    // CloudFront only accepts certs issued in us-east-1; a single-region
+    // stack elsewhere keeps the default cert (surfaced as a deploy warning).
+    const cert = ctx.region === "us-east-1" ? ctx.inn(n.id, "acm-cert")[0] : undefined;
 
     ctx.res(lid, {
       Type: "AWS::CloudFront::Distribution",
@@ -486,7 +676,16 @@ const EMITTERS: Record<string, Emitter> = {
             ForwardedValues: { QueryString: false, Cookies: { Forward: "none" } },
           },
           Restrictions: { GeoRestriction: { RestrictionType: "none" } },
-          ViewerCertificate: { CloudFrontDefaultCertificate: true },
+          ...(cert
+            ? {
+                Aliases: [String(cert.data.config?.domain ?? "")],
+                ViewerCertificate: {
+                  AcmCertificateArn: ref(ctx.lid(cert.id)),
+                  SslSupportMethod: "sni-only",
+                  MinimumProtocolVersion: "TLSv1.2_2021",
+                },
+              }
+            : { ViewerCertificate: { CloudFrontDefaultCertificate: true } }),
           ...(waf ? { WebACLId: att(ctx.lid(waf.id), "Arn") } : {}),
         },
       },
@@ -759,6 +958,40 @@ const EMITTERS: Record<string, Emitter> = {
         });
       }
     });
+
+    // State machine targets need a RoleArn — resource policies don't apply to SFN.
+    ctx.out(n.id, "step-functions").forEach((t) => {
+      const tlid = ctx.lid(t.id);
+      const role = ctx.once("EventsToSfnRole", () => ({
+        Type: "AWS::IAM::Role",
+        Properties: {
+          AssumeRolePolicyDocument: {
+            Version: "2012-10-17",
+            Statement: [
+              { Effect: "Allow", Principal: { Service: "events.amazonaws.com" }, Action: "sts:AssumeRole" },
+            ],
+          },
+          Policies: [
+            {
+              PolicyName: "start-execution",
+              PolicyDocument: {
+                Version: "2012-10-17",
+                // Scope Resource down to specific state machines for production.
+                Statement: [{ Effect: "Allow", Action: "states:StartExecution", Resource: "*" }],
+              },
+            },
+          ],
+        },
+      }));
+      ctx.res(`${lid}${tlid}Rule`, {
+        Type: "AWS::Events::Rule",
+        Properties: {
+          EventBusName: ref(lid),
+          EventPattern: { source: [{ prefix: "" }] },
+          Targets: [{ Arn: ref(tlid), Id: `target-${tlid.toLowerCase()}`, RoleArn: att(role, "Arn") }],
+        },
+      });
+    });
   },
 
   cognito: (n, ctx) => {
@@ -835,6 +1068,108 @@ const EMITTERS: Record<string, Emitter> = {
     }
   },
 
+  "acm-cert": (n, ctx) => {
+    const lid = ctx.lid(n.id);
+    const domain = String(cfg(n, "domain"));
+    // Auto-wire DNS validation only on an exact zone match — a parent-zone
+    // mismatch never validates and would hang the stack.
+    const zone = ctx
+      .nodesOf("route53")
+      .find((z) => String(z.data.config?.domain ?? "") === domain);
+    ctx.res(lid, {
+      Type: "AWS::CertificateManager::Certificate",
+      Properties: {
+        DomainName: domain,
+        ValidationMethod: "DNS",
+        ...(zone
+          ? {
+              DomainValidationOptions: [
+                { DomainName: domain, HostedZoneId: ref(ctx.lid(zone.id)) },
+              ],
+            }
+          : {}),
+      },
+    });
+  },
+
+  "step-functions": (n, ctx) => {
+    const lid = ctx.lid(n.id);
+    const lambdas = ctx.out(n.id, "lambda").sort((a, b) => a.position.x - b.position.x);
+
+    const states: Cfn = {};
+    if (lambdas.length) {
+      lambdas.forEach((fn, i) => {
+        states[`Step${i + 1}`] = {
+          Type: "Task",
+          Resource: att(ctx.lid(fn.id), "Arn"),
+          ...(i < lambdas.length - 1 ? { Next: `Step${i + 2}` } : { End: true }),
+        };
+      });
+    } else {
+      states.Placeholder = {
+        Type: "Pass",
+        Result: "Connect Lambdas to this state machine on the canvas.",
+        End: true,
+      };
+    }
+
+    ctx.res(`${lid}Role`, {
+      Type: "AWS::IAM::Role",
+      Properties: {
+        AssumeRolePolicyDocument: {
+          Version: "2012-10-17",
+          Statement: [
+            { Effect: "Allow", Principal: { Service: "states.amazonaws.com" }, Action: "sts:AssumeRole" },
+          ],
+        },
+        ...(lambdas.length
+          ? {
+              Policies: [
+                {
+                  PolicyName: "invoke-tasks",
+                  PolicyDocument: {
+                    Version: "2012-10-17",
+                    Statement: [
+                      {
+                        Effect: "Allow",
+                        Action: "lambda:InvokeFunction",
+                        Resource: lambdas.map((fn) => att(ctx.lid(fn.id), "Arn")),
+                      },
+                    ],
+                  },
+                },
+              ],
+            }
+          : {}),
+      },
+    });
+
+    ctx.res(lid, {
+      Type: "AWS::StepFunctions::StateMachine",
+      Properties: {
+        StateMachineType: String(cfg(n, "type")) || "STANDARD",
+        RoleArn: att(`${lid}Role`, "Arn"),
+        Definition: {
+          Comment: `${n.data.label} — generated by KloudArch; tasks run left-to-right from the canvas.`,
+          StartAt: lambdas.length ? "Step1" : "Placeholder",
+          States: states,
+        },
+      },
+    });
+  },
+
+  kinesis: (n, ctx) => {
+    const mode = String(cfg(n, "mode")) || "ON_DEMAND";
+    ctx.res(ctx.lid(n.id), {
+      Type: "AWS::Kinesis::Stream",
+      Properties: {
+        RetentionPeriodHours: num(n, "retention_hours", 24),
+        StreamModeDetails: { StreamMode: mode },
+        ...(mode === "PROVISIONED" ? { ShardCount: num(n, "shards", 1) } : {}),
+      },
+    });
+  },
+
   "secrets-manager": (n, ctx) => {
     ctx.res(ctx.lid(n.id), {
       Type: "AWS::SecretsManager::Secret",
@@ -865,6 +1200,20 @@ const EMITTERS: Record<string, Emitter> = {
 
 export function cfnDeployWarnings(input: GenInput): string[] {
   const warnings: string[] = [];
+  const byId = new Map(input.nodes.map((n) => [n.id, n]));
+  const inn = (id: string, serviceId: string) =>
+    input.edges
+      .filter((e) => e.target === id)
+      .map((e) => byId.get(e.source))
+      .filter((n): n is DesignNode => !!n && n.data.serviceId === serviceId);
+  const out = (id: string, serviceId: string) =>
+    input.edges
+      .filter((e) => e.source === id)
+      .map((e) => byId.get(e.target))
+      .filter((n): n is DesignNode => !!n && n.data.serviceId === serviceId);
+  const vpcs = input.nodes.filter((z) => z.data.serviceId === "vpc");
+  const subnets = input.nodes.filter((z) => z.data.serviceId === "subnet");
+
   for (const n of input.nodes) {
     const s = n.data.serviceId;
     if (s === "lambda") {
@@ -879,9 +1228,9 @@ export function cfnDeployWarnings(input: GenInput): string[] {
         );
       }
     }
-    if (s === "alb" && n.data.config?.protocol === "HTTPS") {
+    if (s === "alb" && n.data.config?.protocol === "HTTPS" && inn(n.id, "acm-cert").length === 0) {
       warnings.push(
-        `“${n.data.label}”: HTTPS listeners need an ACM certificate — deploying an HTTP listener on port 80 instead.`,
+        `“${n.data.label}”: HTTPS needs a certificate — connect an ACM Certificate, or this deploys an HTTP listener on port 80.`,
       );
     }
     if (s === "waf" && n.data.config?.scope === "CLOUDFRONT" && input.region !== "us-east-1") {
@@ -889,11 +1238,39 @@ export function cfnDeployWarnings(input: GenInput): string[] {
         `“${n.data.label}”: CloudFront-scoped WAF must deploy in us-east-1 — it is omitted from this ${input.region} stack.`,
       );
     }
-    if (s === "subnet") {
-      // mirrored by the subnet-vpc lint; repeated here because CFN drops the resource entirely
-      const zones = input.nodes.filter((z) => z.data.serviceId === "vpc");
-      if (!zones.some((z) => contains(z, n))) {
-        warnings.push(`“${n.data.label}” has no containing VPC — it is omitted from the stack.`);
+    if (s === "subnet" && !vpcs.some((z) => contains(z, n))) {
+      warnings.push(`“${n.data.label}” has no containing VPC — it is omitted from the stack.`);
+    }
+    if (s === "internet-gateway" && !vpcs.some((z) => contains(z, n))) {
+      warnings.push(`“${n.data.label}” isn't inside a VPC zone — it is omitted from the stack.`);
+    }
+    if (s === "nat-gateway") {
+      if (!subnets.some((z) => contains(z, n))) {
+        warnings.push(`“${n.data.label}” isn't inside a subnet — it is omitted from the stack.`);
+      } else {
+        warnings.push(
+          `“${n.data.label}”: NAT gateways take 1–5 minutes to create and delete — stack events will sit on it.`,
+        );
+      }
+    }
+    if (s === "acm-cert") {
+      const domain = String(n.data.config?.domain ?? "");
+      const zone = input.nodes.find(
+        (z) => z.data.serviceId === "route53" && String(z.data.config?.domain ?? "") === domain,
+      );
+      if (zone) {
+        warnings.push(
+          `“${n.data.label}”: validation rides on the “${zone.data.label}” zone created in this stack — it only succeeds if ${domain} is ALREADY delegated to that zone's name servers at your registrar. Otherwise the stack hangs for hours and rolls back.`,
+        );
+      } else {
+        warnings.push(
+          `“${n.data.label}”: no matching hosted zone in the design — create the DNS validation records manually in your DNS provider, or the stack waits on the certificate.`,
+        );
+      }
+      if (out(n.id, "cloudfront").length > 0 && input.region !== "us-east-1") {
+        warnings.push(
+          `“${n.data.label}”: CloudFront only accepts us-east-1 certificates — the CDN keeps its default certificate in this ${input.region} stack. (The Terraform export handles this with a us-east-1 provider alias.)`,
+        );
       }
     }
   }
@@ -905,17 +1282,22 @@ export function cfnDeployWarnings(input: GenInput): string[] {
 const EMIT_ORDER = [
   "vpc",
   "subnet",
+  "internet-gateway",
+  "nat-gateway",
   "s3",
   "efs",
   "dynamodb",
   "rds",
   "elasticache",
   "sqs",
+  "kinesis",
   "cognito",
+  "acm-cert",
   "secrets-manager",
   "cloudwatch",
   "ec2",
   "lambda",
+  "step-functions",
   "alb",
   "ecs",
   "sns",
@@ -967,16 +1349,27 @@ export function buildCloudFormationTemplate(input: GenInput): Cfn {
       const candidates = zones.filter((z) => z.data.serviceId === serviceId && contains(z, node));
       return candidates[0];
     },
-    vpcSubnets: (node) => {
-      const direct = zones.filter((z) => z.data.serviceId === "subnet" && contains(z, node));
+    nodesOf: (serviceId) => nodes.filter((n) => n.data.serviceId === serviceId),
+    vpcSubnets: (node, opts) => {
+      const vpcOf = (n: DesignNode) =>
+        zones.find((z) => z.data.serviceId === "vpc" && contains(z, n));
       const vpc =
-        zones.find((z) => z.data.serviceId === "vpc" && contains(z, node)) ??
-        (direct[0] ? zones.find((z) => z.data.serviceId === "vpc" && contains(z, direct[0])) : undefined);
-      if (!vpc) return direct;
-      const all = zones.filter(
-        (z) => z.data.serviceId === "subnet" && contains(vpc, z) && zones.some((v) => v.id === vpc.id),
-      );
-      return all.length ? all : direct;
+        vpcOf(node) ??
+        (() => {
+          const s = zones.find((z) => z.data.serviceId === "subnet" && contains(z, node));
+          return s ? vpcOf(s) : undefined;
+        })();
+      let subs = vpc
+        ? zones.filter((z) => z.data.serviceId === "subnet" && contains(vpc, z))
+        : zones.filter((z) => z.data.serviceId === "subnet" && contains(z, node));
+      if (opts?.publicOnly) subs = subs.filter((s) => s.data.config?.visibility === "public");
+      const seen = new Set<string>();
+      return subs.filter((s) => {
+        const az = String(s.data.config?.az ?? "a");
+        if (seen.has(az)) return false;
+        seen.add(az);
+        return true;
+      });
     },
     res: (logicalId, resource) => {
       resources[logicalId] = resource;

@@ -155,7 +155,7 @@ function Hero() {
 
 function Stats() {
   const stats: [string, string][] = [
-    ["22", "Cloud services"],
+    ["27", "Cloud services"],
     ["2", "IaC formats, live"],
     ["1-click", "Deploy & teardown"],
     ["MIT", "Licensed, self-hosted"],

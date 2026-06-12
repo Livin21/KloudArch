@@ -55,23 +55,110 @@ export function validateDesign(nodes: DesignNode[], edges: DesignEdge[]): Lint[]
     }
   }
 
+  // ── Routing rules (IGW / NAT / route derivation) ──
+  const igws = services.filter((n) => svc(n) === "internet-gateway");
+  const nats = services.filter((n) => svc(n) === "nat-gateway");
+  const natSubnet = (nat: DesignNode) => subnets.find((s) => contains(s, nat));
+  const azOf = (s: DesignNode | undefined) => String(s?.data.config?.az ?? "a");
+
+  for (const vpc of vpcs) {
+    const publicSubs = subnets.filter((s) => contains(vpc, s) && s.data.config?.visibility === "public");
+    if (publicSubs.length > 0 && !igws.some((g) => contains(vpc, g))) {
+      add(
+        "public-subnet-no-igw",
+        "warn",
+        `“${vpc.data.label}” has public subnets but no Internet Gateway — nothing in it can reach the internet.`,
+        [vpc.id],
+      );
+    }
+    // Duplicate NATs racing for the same (VPC, AZ) route.
+    const natsHere = nats.filter((g) => contains(vpc, g));
+    const byAz = new Map<string, DesignNode[]>();
+    natsHere.forEach((g) => {
+      const az = azOf(natSubnet(g));
+      byAz.set(az, [...(byAz.get(az) ?? []), g]);
+    });
+    for (const [az, group] of byAz) {
+      if (group.length > 1) {
+        add(
+          "nat-duplicate",
+          "info",
+          `${group.length} NAT gateways share AZ “${az}” in “${vpc.data.label}” — only the first one routes traffic.`,
+          group.map((g) => g.id),
+        );
+      }
+    }
+  }
+
+  for (const nat of nats) {
+    const subnet = natSubnet(nat);
+    if (!subnet || subnet.data.config?.visibility !== "public") {
+      add(
+        "nat-public-subnet",
+        "warn",
+        `“${nat.data.label}” must sit inside a public subnet to provide outbound internet.`,
+        [nat.id],
+      );
+    } else {
+      const vpc = vpcs.find((v) => contains(v, subnet));
+      if (vpc && !igws.some((g) => contains(vpc, g))) {
+        add(
+          "nat-no-igw",
+          "warn",
+          `“${nat.data.label}” needs an Internet Gateway in “${vpc.data.label}” — a NAT without one is dead.`,
+          [nat.id],
+        );
+      }
+    }
+  }
+
   for (const n of services) {
     const s = svc(n);
 
     if (s === "alb") {
       if (!inAny(n, subnets)) {
         add("alb-subnet", "warn", `“${n.data.label}” isn't inside a subnet — ALBs need subnets to launch.`, [n.id]);
+      } else if (n.data.config?.scheme !== "internal") {
+        const vpc = vpcs.find((v) => contains(v, n));
+        const azs = new Set(
+          subnets
+            .filter((sb) => vpc && contains(vpc, sb) && sb.data.config?.visibility === "public")
+            .map((sb) => String(sb.data.config?.az ?? "a")),
+        );
+        if (azs.size < 2) {
+          add(
+            "alb-one-az",
+            "warn",
+            `“${n.data.label}” needs public subnets in two different AZs — it has ${azs.size}.`,
+            [n.id],
+          );
+        }
       }
       if (out(n.id, ["ec2", "ecs"]).length === 0) {
         add("alb-targets", "warn", `“${n.data.label}” has no targets — connect it to EC2 or ECS.`, [n.id]);
       }
+      if (n.data.config?.protocol === "HTTPS" && inn(n.id, ["acm-cert"]).length === 0) {
+        add(
+          "alb-https-no-cert",
+          "info",
+          `“${n.data.label}” wants HTTPS — connect an ACM Certificate, or deploys fall back to HTTP.`,
+          [n.id],
+        );
+      }
+    }
+
+    if (s === "step-functions" && out(n.id, ["lambda"]).length === 0) {
+      add("sfn-no-tasks", "info", `“${n.data.label}” has no Lambda tasks connected — it deploys as a placeholder.`, [n.id]);
     }
 
     if ((s === "ec2" || s === "ecs") && subnets.length > 0 && !inAny(n, subnets)) {
       add("compute-subnet", "info", `“${n.data.label}” is outside every subnet — it will use the default VPC.`, [n.id]);
     }
 
-    if (s === "lambda" && inn(n.id, ["api-gateway", "sqs", "sns", "eventbridge", "alb"]).length === 0) {
+    if (
+      s === "lambda" &&
+      inn(n.id, ["api-gateway", "sqs", "sns", "eventbridge", "alb", "kinesis", "step-functions"]).length === 0
+    ) {
       add("lambda-trigger", "info", `“${n.data.label}” has no trigger — connect an API, queue, topic or bus to it.`, [n.id]);
     }
 
@@ -110,8 +197,10 @@ export function validateDesign(nodes: DesignNode[], edges: DesignEdge[]): Lint[]
   }
 
   // Orphans last, and only for nodes no other rule already called out.
+  // IGW/NAT wire through containment, never edges — they're exempt.
+  const containmentDriven = new Set(["internet-gateway", "nat-gateway"]);
   for (const n of services) {
-    if (!connected(n.id) && !flagged.has(n.id)) {
+    if (!connected(n.id) && !flagged.has(n.id) && !containmentDriven.has(svc(n))) {
       add("orphan", "info", `“${n.data.label}” isn't connected to anything.`, [n.id]);
     }
   }

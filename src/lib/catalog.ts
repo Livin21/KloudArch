@@ -1,6 +1,8 @@
 import {
   Activity,
   Archive,
+  ArrowRightLeft,
+  BadgeCheck,
   Box,
   Container,
   Database,
@@ -12,6 +14,7 @@ import {
   MemoryStick,
   Plug,
   Route,
+  Router,
   Server,
   ShieldAlert,
   Signpost,
@@ -21,6 +24,8 @@ import {
   Table2,
   UserCheck,
   Users,
+  Waves,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 import type { ConfigValue, NodeConfig } from "./types";
@@ -169,6 +174,24 @@ export const SERVICES: ServiceDef[] = [
       { key: "visibility", label: "Visibility", type: "select", options: ["public", "private"], default: "private" },
       { key: "az", label: "AZ suffix", type: "text", default: "a", hint: "Appended to the region, e.g. us-east-1a" },
     ],
+  },
+  {
+    id: "internet-gateway",
+    name: "Internet Gateway",
+    abbr: "IGW",
+    category: "network",
+    icon: Router,
+    blurb: "Internet access for a VPC. Drop it inside the VPC — routing for public subnets is derived automatically.",
+    fields: [],
+  },
+  {
+    id: "nat-gateway",
+    name: "NAT Gateway",
+    abbr: "NAT",
+    category: "network",
+    icon: ArrowRightLeft,
+    blurb: "Outbound internet for private subnets. Place inside a public subnet — private route tables are derived.",
+    fields: [],
   },
   {
     id: "alb",
@@ -355,6 +378,30 @@ export const SERVICES: ServiceDef[] = [
     blurb: "Event bus with rule-based routing between services.",
     fields: [{ key: "bus_name", label: "Bus name", type: "text", default: "app-events" }],
   },
+  {
+    id: "step-functions",
+    name: "Step Functions",
+    abbr: "SFN",
+    category: "messaging",
+    icon: Workflow,
+    blurb: "Orchestrate connected Lambdas as a sequential state machine.",
+    fields: [
+      { key: "type", label: "Type", type: "select", options: ["STANDARD", "EXPRESS"], default: "STANDARD" },
+    ],
+  },
+  {
+    id: "kinesis",
+    name: "Kinesis Stream",
+    abbr: "KIN",
+    category: "messaging",
+    icon: Waves,
+    blurb: "High-throughput data streaming with shard-based consumers.",
+    fields: [
+      { key: "mode", label: "Capacity mode", type: "select", options: ["ON_DEMAND", "PROVISIONED"], default: "ON_DEMAND" },
+      { key: "shards", label: "Shards", type: "number", default: 1, min: 1, max: 64, hint: "PROVISIONED mode only" },
+      { key: "retention_hours", label: "Retention (hours)", type: "number", default: 24, min: 24, max: 8760 },
+    ],
+  },
 
   // ── Security & Identity ────────────────────────────────────────────────
   {
@@ -380,6 +427,15 @@ export const SERVICES: ServiceDef[] = [
       { key: "scope", label: "Scope", type: "select", options: ["REGIONAL", "CLOUDFRONT"], default: "REGIONAL" },
       { key: "managed_common_rules", label: "AWS common rules", type: "boolean", default: true },
     ],
+  },
+  {
+    id: "acm-cert",
+    name: "ACM Certificate",
+    abbr: "ACM",
+    category: "security",
+    icon: BadgeCheck,
+    blurb: "DNS-validated TLS certificate. Connect to a load balancer or CDN for real HTTPS.",
+    fields: [{ key: "domain", label: "Domain name", type: "text", default: "app.example.com" }],
   },
   {
     id: "secrets-manager",

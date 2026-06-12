@@ -16,9 +16,11 @@
 
 ## Features
 
-- **Drafting canvas** — drag 22 AWS-flavored components (compute, network,
+- **Drafting canvas** — drag 27 AWS-flavored components (compute, network,
   data, storage, messaging, security…) onto an infinite blueprint grid,
   wire them together, and group them in resizable VPC / subnet zones.
+  Internet/NAT gateways derive route tables automatically; ALB connections
+  derive security groups — diagrams deploy as routable networks.
 - **Live IaC, two formats** — `main.tf` (Terraform) and `template.json`
   (CloudFormation) regenerate on every edit. Connections become real wiring:
   ALB target groups, API Gateway → Lambda integrations, SQS event source

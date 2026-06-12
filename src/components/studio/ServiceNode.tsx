@@ -3,11 +3,14 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { memo } from "react";
 import { CATEGORIES, SERVICE_MAP } from "@/lib/catalog";
+import { useNodeLints } from "@/lib/lint-cache";
 import type { DesignNode } from "@/lib/types";
 import Corners from "./Corners";
+import LintBadge from "./LintBadge";
 
-function ServiceNodeInner({ data, selected }: NodeProps<DesignNode>) {
+function ServiceNodeInner({ id, data, selected }: NodeProps<DesignNode>) {
   const svc = SERVICE_MAP[data.serviceId];
+  const lints = useNodeLints(id);
   if (!svc) return null;
   const cat = CATEGORIES[svc.category];
   const Icon = svc.icon;
@@ -27,6 +30,7 @@ function ServiceNodeInner({ data, selected }: NodeProps<DesignNode>) {
       }`}
     >
       {selected && <Corners />}
+      <LintBadge badge={lints} />
       <div className="flex items-start gap-2.5">
         <span
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px]"

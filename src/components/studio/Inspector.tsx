@@ -4,8 +4,9 @@ import { ArrowRight, CircleCheck, Copy, Info, Trash2, TriangleAlert, X } from "l
 import { useMemo } from "react";
 import { CATEGORIES, CATEGORY_ORDER, SERVICE_MAP, type ServiceField } from "@/lib/catalog";
 import { REGIONS, useDesignStore } from "@/lib/store";
+import { getLints, lintsByNode } from "@/lib/lint-cache";
 import type { ConfigValue, DesignNode } from "@/lib/types";
-import { validateDesign, type Lint } from "@/lib/validate";
+import type { Lint } from "@/lib/validate";
 
 function LintRow({ lint, onClick }: { lint: Lint; onClick?: () => void }) {
   const warn = lint.severity === "warn";
@@ -229,7 +230,7 @@ function NodeLints({ node }: { node: DesignNode }) {
   const nodes = useDesignStore((s) => s.nodes);
   const edges = useDesignStore((s) => s.edges);
   const lints = useMemo(
-    () => validateDesign(nodes, edges).filter((l) => l.nodeIds.includes(node.id)),
+    () => lintsByNode(nodes, edges).get(node.id) ?? [],
     [nodes, edges, node.id],
   );
   if (lints.length === 0) return null;
@@ -251,7 +252,7 @@ function ProjectInspector() {
   const edges = useDesignStore((s) => s.edges);
   const selectOnly = useDesignStore((s) => s.selectOnly);
 
-  const lints = useMemo(() => validateDesign(nodes, edges), [nodes, edges]);
+  const lints = useMemo(() => getLints(nodes, edges), [nodes, edges]);
 
   const counts = CATEGORY_ORDER.map((cat) => ({
     cat,

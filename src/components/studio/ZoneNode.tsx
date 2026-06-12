@@ -3,12 +3,15 @@
 import { NodeResizer, type NodeProps } from "@xyflow/react";
 import { memo } from "react";
 import { CATEGORIES, SERVICE_MAP } from "@/lib/catalog";
+import { useNodeLints } from "@/lib/lint-cache";
 import { useDesignStore } from "@/lib/store";
 import type { DesignNode } from "@/lib/types";
 import Corners from "./Corners";
+import LintBadge from "./LintBadge";
 
-function ZoneNodeInner({ data, selected }: NodeProps<DesignNode>) {
+function ZoneNodeInner({ id, data, selected }: NodeProps<DesignNode>) {
   const svc = SERVICE_MAP[data.serviceId];
+  const lints = useNodeLints(id);
   if (!svc) return null;
   const isPublicSubnet =
     data.serviceId === "subnet" && data.config?.visibility === "public";
@@ -48,6 +51,7 @@ function ZoneNodeInner({ data, selected }: NodeProps<DesignNode>) {
         {isPublicSubnet ? " · PUBLIC" : data.serviceId === "subnet" ? " · PRIVATE" : ""}
       </span>
       {selected && <Corners />}
+      <LintBadge badge={lints} />
     </div>
   );
 }

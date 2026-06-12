@@ -2,8 +2,9 @@
 
 import { useMemo } from "react";
 import { useCursorStore } from "@/lib/cursor";
+import { getLints } from "@/lib/lint-cache";
 import { useDesignStore } from "@/lib/store";
-import { lintCounts, validateDesign } from "@/lib/validate";
+import { lintCounts } from "@/lib/validate";
 
 function Readout() {
   const x = useCursorStore((s) => s.x);
@@ -29,7 +30,7 @@ function ChecksChip() {
   const selectOnly = useDesignStore((s) => s.selectOnly);
   const setDockTab = useDesignStore((s) => s.setDockTab);
 
-  const lints = useMemo(() => validateDesign(nodes, edges), [nodes, edges]);
+  const lints = useMemo(() => getLints(nodes, edges), [nodes, edges]);
   const { warns, infos } = lintCounts(lints);
 
   if (nodes.length === 0) return null;

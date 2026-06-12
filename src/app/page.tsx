@@ -424,7 +424,7 @@ function OpenSource() {
           </a>
         </div>
         <p className="mt-10 font-mono text-[9.5px] uppercase tracking-[0.16em] text-fg-faint">
-          Roadmap · v0.2 one-click deploy · GCP + Azure catalogs · realtime collaboration
+          Roadmap · more IaC backends · GCP + Azure catalogs · realtime collaboration
         </p>
       </div>
     </section>

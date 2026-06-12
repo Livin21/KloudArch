@@ -8,7 +8,7 @@ import TerraformPanel from "./TerraformPanel";
 
 const TABS: { id: DockTab; label: string }[] = [
   { id: "inspect", label: "Inspect" },
-  { id: "code", label: "Terraform" },
+  { id: "code", label: "Code" },
   { id: "chat", label: "Assistant" },
 ];
 

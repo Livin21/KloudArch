@@ -17,18 +17,10 @@ import {
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { LogoLockup } from "@/components/Logo";
+import { generateCloudFormation } from "@/lib/cloudformation";
+import { downloadText } from "@/lib/download";
 import { serializeProject, useDesignStore } from "@/lib/store";
 import { generateTerraform } from "@/lib/terraform";
-
-function downloadText(filename: string, text: string, type = "text/plain") {
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 function slugify(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "design";
@@ -73,6 +65,12 @@ export default function TopBar() {
   const exportTerraform = () => {
     const file = serializeProject();
     downloadText("main.tf", generateTerraform(file));
+    setExportOpen(false);
+  };
+
+  const exportCloudFormation = () => {
+    const file = serializeProject();
+    downloadText("template.json", generateCloudFormation(file), "application/json");
     setExportOpen(false);
   };
 
@@ -160,6 +158,16 @@ export default function TopBar() {
                 <span>
                   Terraform
                   <span className="block font-mono text-[9px] text-fg-faint">main.tf</span>
+                </span>
+              </button>
+              <button
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[12.5px] text-fg-dim hover:bg-panel hover:text-fg"
+                onClick={exportCloudFormation}
+              >
+                <FileCode2 size={14} className="text-accent" />
+                <span>
+                  CloudFormation
+                  <span className="block font-mono text-[9px] text-fg-faint">template.json</span>
                 </span>
               </button>
               <button

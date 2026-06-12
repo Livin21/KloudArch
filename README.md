@@ -10,7 +10,7 @@
   and export working Terraform — all in the browser.
 </p>
 
-> v0.1 — the architecture design studio. One-click deployment lands in v0.2.
+> v0.2 — design studio + one-click deploy. Draft it, review the change set, ship it.
 
 ![KloudArch Studio — three-tier web app template with live Terraform](docs/screenshot.png)
 
@@ -19,11 +19,16 @@
 - **Drafting canvas** — drag 22 AWS-flavored components (compute, network,
   data, storage, messaging, security…) onto an infinite blueprint grid,
   wire them together, and group them in resizable VPC / subnet zones.
-- **Live Terraform** — the `main.tf` for your design is regenerated on every
-  edit. Connections become real wiring: ALB target groups, API Gateway → Lambda
-  integrations, SQS event source mappings, CloudFront origins, Route 53 aliases.
-  Services dropped inside VPC/subnet zones get the right `vpc_id` / `subnet_id`
-  references from geometric containment.
+- **Live IaC, two formats** — `main.tf` (Terraform) and `template.json`
+  (CloudFormation) regenerate on every edit. Connections become real wiring:
+  ALB target groups, API Gateway → Lambda integrations, SQS event source
+  mappings, CloudFront origins, Route 53 aliases. Services dropped inside
+  VPC/subnet zones get the right VPC/subnet references from geometric
+  containment. More backends are planned — each is one emitter file.
+- **One-click deploy** — the studio deploys designs as CloudFormation stacks
+  with your own AWS credentials: preflight checks (account, design lints),
+  a reviewable change set (add/modify/remove, replacement flags), a live
+  stack-event log, outputs on success, and a type-to-confirm teardown.
 - **AI copilot** — describe what you want ("make this event-driven", "add a
   cache layer") and the assistant edits the canvas through tools. Bring your
   own key: Anthropic, OpenAI, Google, or the Vercel AI Gateway, configured
@@ -64,6 +69,21 @@ cp .env.example .env.local
 Keys never leave your server: the browser talks to `/api/chat`, which calls
 the provider with the key from your environment.
 
+### Enable deploy-from-studio
+
+```bash
+# .env.local — use a SANDBOX account; these credentials create and destroy
+# real infrastructure
+AWS_ACCESS_KEY_ID=AKIA…
+AWS_SECRET_ACCESS_KEY=…
+```
+
+Deploys run as **CloudFormation stacks** (`kloudarch-<project>`): the studio
+computes a change set, you review every add/modify/remove, and AWS executes it
+natively — no runner infrastructure. Terraform remains the portable export.
+Re-deploying the same project diffs against the existing stack; teardown
+deletes it. Set `DEPLOY_DISABLED=1` on any instance you share publicly.
+
 ## How it works
 
 ```
@@ -87,9 +107,9 @@ always works with what you see.
 
 ## Roadmap
 
-- **v0.2** — deploy from the studio (Terraform plan/apply runner with
-  credential isolation), multi-file Terraform output, design validation lints
+- More IaC backends (Pulumi, CDK) from the same design graph
 - GCP / Azure catalogs, custom components
+- Optional deploy auth (`DEPLOY_PASSWORD`), multi-file Terraform output
 - Shareable links and real-time collaboration
 
 ## Contributing

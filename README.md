@@ -82,7 +82,11 @@ Deploys run as **CloudFormation stacks** (`kloudarch-<project>`): the studio
 computes a change set, you review every add/modify/remove, and AWS executes it
 natively — no runner infrastructure. Terraform remains the portable export.
 Re-deploying the same project diffs against the existing stack; teardown
-deletes it. Set `DEPLOY_DISABLED=1` on any instance you share publicly.
+deletes it.
+
+If anyone but you can reach your instance, set `DEPLOY_PASSWORD=<secret>` —
+the deploy dialog will require it before touching AWS. Set `DEPLOY_DISABLED=1`
+to switch deployments off entirely (as on kloudarch.com).
 
 ## How it works
 
@@ -109,7 +113,7 @@ always works with what you see.
 
 - More IaC backends (Pulumi, CDK) from the same design graph
 - GCP / Azure catalogs, custom components
-- Optional deploy auth (`DEPLOY_PASSWORD`), multi-file Terraform output
+- Multi-file Terraform output
 - Shareable links and real-time collaboration
 
 ## Contributing

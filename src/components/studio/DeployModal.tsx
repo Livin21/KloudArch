@@ -5,6 +5,7 @@ import {
   Check,
   ExternalLink,
   FileCode2,
+  KeyRound,
   Loader2,
   Rocket,
   Trash2,
@@ -22,6 +23,7 @@ type Phase =
   | "loading"
   | "disabled"
   | "unconfigured"
+  | "password"
   | "preflight"
   | "creating"
   | "review"
@@ -75,9 +77,14 @@ export default function DeployModal() {
   const [ackWarnings, setAckWarnings] = useState(false);
   const [showTemplate, setShowTemplate] = useState(false);
   const [teardownInput, setTeardownInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
 
   const sinceRef = useRef(0);
+  const passwordRef = useRef("");
   const logRef = useRef<HTMLDivElement>(null);
+
+  const authHeaders = (): Record<string, string> =>
+    passwordRef.current ? { "x-deploy-password": passwordRef.current } : {};
 
   const lints = useMemo(() => getLints(nodes, edges), [nodes, edges]);
   const warnLints = lints.filter((l) => l.severity === "warn");
@@ -106,14 +113,21 @@ export default function DeployModal() {
 
   const loadMeta = useCallback(async () => {
     reset();
+    if (!passwordRef.current) {
+      passwordRef.current = window.sessionStorage.getItem("kloudarch:deploy-password") ?? "";
+    }
     try {
       const res = await fetch(
         `/api/deploy?project=${encodeURIComponent(projectName)}&region=${encodeURIComponent(region)}`,
+        { headers: authHeaders() },
       );
       const data = await res.json();
       if (data.disabled) setPhase("disabled");
       else if (data.configured === false) setPhase("unconfigured");
-      else if (data.error) {
+      else if (data.passwordRequired) {
+        if (data.error) setError(data.error);
+        setPhase("password");
+      } else if (data.error) {
         setError(data.error);
         setPhase("failed");
       } else {
@@ -125,6 +139,15 @@ export default function DeployModal() {
       setPhase("failed");
     }
   }, [projectName, region, reset]);
+
+  const submitPassword = () => {
+    const value = passwordInput.trim();
+    if (!value) return;
+    passwordRef.current = value;
+    window.sessionStorage.setItem("kloudarch:deploy-password", value);
+    setPasswordInput("");
+    loadMeta();
+  };
 
   // Load deploy status whenever the modal opens. The synchronous state reset
   // inside loadMeta is deliberate — fresh modal session, single render.
@@ -152,6 +175,7 @@ export default function DeployModal() {
         if (phase === "creating" && meta && changeSet) {
           const res = await fetch(
             `/api/deploy/changeset?stack=${meta.stackName}&id=${encodeURIComponent(changeSet.id)}&region=${meta.region}`,
+            { headers: authHeaders() },
           );
           const data = await res.json();
           if (data.error) {
@@ -165,7 +189,7 @@ export default function DeployModal() {
               // Clean up the empty change set quietly.
               fetch("/api/deploy/changeset", {
                 method: "DELETE",
-                headers: { "content-type": "application/json" },
+                headers: { "content-type": "application/json", ...authHeaders() },
                 body: JSON.stringify({ stack: meta.stackName, id: changeSet.id, region: meta.region }),
               }).catch(() => {});
               setPhase("no_changes");
@@ -177,6 +201,7 @@ export default function DeployModal() {
         } else if ((phase === "deploying" || phase === "deleting") && meta) {
           const res = await fetch(
             `/api/deploy/stack?name=${meta.stackName}&region=${meta.region}&since=${sinceRef.current}`,
+            { headers: authHeaders() },
           );
           const data = await res.json();
           if (data.error) {
@@ -240,7 +265,7 @@ export default function DeployModal() {
     try {
       const res = await fetch("/api/deploy/changeset", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...authHeaders() },
         body: JSON.stringify({ design: design() }),
       });
       const data = await res.json();
@@ -262,7 +287,7 @@ export default function DeployModal() {
     setError(null);
     const res = await fetch("/api/deploy/changeset/execute", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders() },
       body: JSON.stringify({ stack: meta.stackName, id: changeSet.id, region: meta.region }),
     });
     const data = await res.json();
@@ -279,7 +304,7 @@ export default function DeployModal() {
     if (!meta || !changeSet) return;
     await fetch("/api/deploy/changeset", {
       method: "DELETE",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders() },
       body: JSON.stringify({ stack: meta.stackName, id: changeSet.id, region: meta.region }),
     }).catch(() => {});
     setChangeSet(null);
@@ -293,7 +318,7 @@ export default function DeployModal() {
     setError(null);
     const res = await fetch("/api/deploy/stack", {
       method: "DELETE",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders() },
       body: JSON.stringify({ name: meta.stackName, region: meta.region }),
     });
     const data = await res.json();
@@ -365,6 +390,38 @@ export default function DeployModal() {
                 These credentials can create and destroy real infrastructure — use a sandbox
                 account, and never expose a deploy-enabled instance publicly.
               </p>
+            </div>
+          )}
+
+          {phase === "password" && (
+            <div className="rounded-[3px] border border-line bg-ink p-4">
+              <p className="u-label mb-2 flex items-center gap-1.5">
+                <KeyRound size={11} className="text-amber" />
+                Deploy password required
+              </p>
+              <p className="text-[12px] leading-relaxed text-fg-dim">
+                This instance protects deployments with a shared secret
+                (<code className="font-mono text-accent">DEPLOY_PASSWORD</code>).
+                Enter it to continue — it&apos;s kept for this browser session only.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <input
+                  type="password"
+                  className="u-input !h-9 flex-1 font-mono !text-[12px]"
+                  placeholder="deploy password…"
+                  value={passwordInput}
+                  autoFocus
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submitPassword()}
+                />
+                <button
+                  className="inline-flex h-9 items-center gap-1.5 rounded-[3px] bg-amber px-4 text-[12.5px] font-semibold text-ink transition-colors hover:bg-[#ffc452] disabled:opacity-40"
+                  onClick={submitPassword}
+                  disabled={!passwordInput.trim()}
+                >
+                  Unlock
+                </button>
+              </div>
             </div>
           )}
 

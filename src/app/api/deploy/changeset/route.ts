@@ -2,6 +2,7 @@ import { buildCloudFormationTemplate, generateCloudFormation } from "@/lib/cloud
 import {
   awsErrorMessage,
   createChangeSet,
+  deployAuthOk,
   deployConfigured,
   deployDisabled,
   describeChangeSet,
@@ -13,7 +14,7 @@ import { isKloudarchStack, parseDesign, REGION_RE } from "../schema";
 
 export const maxDuration = 60;
 
-function guard() {
+function guard(req: Request) {
   if (deployDisabled()) {
     return Response.json(
       { error: "Deployments are disabled on this hosted instance. Self-host KloudArch with your own AWS credentials." },
@@ -26,12 +27,15 @@ function guard() {
       { status: 503 },
     );
   }
+  if (!deployAuthOk(req)) {
+    return Response.json({ error: "Wrong or missing deploy password.", passwordRequired: true }, { status: 401 });
+  }
   return null;
 }
 
 /** Create a change set for the design (CREATE or UPDATE by stack existence). */
 export async function POST(req: Request) {
-  const blocked = guard();
+  const blocked = guard(req);
   if (blocked) return blocked;
 
   const body = await req.json().catch(() => null);
@@ -69,7 +73,7 @@ export async function POST(req: Request) {
 
 /** Poll change-set creation status + the change list. */
 export async function GET(req: Request) {
-  const blocked = guard();
+  const blocked = guard(req);
   if (blocked) return blocked;
 
   const url = new URL(req.url);
@@ -88,7 +92,7 @@ export async function GET(req: Request) {
 
 /** Discard a pending change set. */
 export async function DELETE(req: Request) {
-  const blocked = guard();
+  const blocked = guard(req);
   if (blocked) return blocked;
 
   const body = await req.json().catch(() => null);

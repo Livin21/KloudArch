@@ -10,6 +10,7 @@ import {
   type Stack,
 } from "@aws-sdk/client-cloudformation";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
+import { timingSafeEqual } from "node:crypto";
 
 /**
  * Server-only deploy engine: thin wrapper around the CloudFormation SDK.
@@ -26,6 +27,20 @@ export function deployDisabled(): boolean {
 
 export function deployConfigured(): boolean {
   return Boolean(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
+}
+
+export function deployPasswordRequired(): boolean {
+  return Boolean(process.env.DEPLOY_PASSWORD);
+}
+
+/** Timing-safe check of the optional shared deploy secret. */
+export function deployAuthOk(req: Request): boolean {
+  const expected = process.env.DEPLOY_PASSWORD;
+  if (!expected) return true;
+  const given = req.headers.get("x-deploy-password") ?? "";
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 export function stackNameFor(projectName: string): string {

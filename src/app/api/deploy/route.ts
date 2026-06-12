@@ -1,6 +1,7 @@
 import {
   awsErrorMessage,
   consoleUrl,
+  deployAuthOk,
   deployConfigured,
   deployDisabled,
   getStack,
@@ -12,6 +13,16 @@ import { REGION_RE } from "./schema";
 export async function GET(req: Request) {
   if (deployDisabled()) return Response.json({ configured: false, disabled: true });
   if (!deployConfigured()) return Response.json({ configured: false });
+  if (!deployAuthOk(req)) {
+    return Response.json(
+      {
+        configured: true,
+        passwordRequired: true,
+        ...(req.headers.get("x-deploy-password") ? { error: "Wrong deploy password." } : {}),
+      },
+      { status: 401 },
+    );
+  }
 
   const url = new URL(req.url);
   const project = url.searchParams.get("project") ?? "";

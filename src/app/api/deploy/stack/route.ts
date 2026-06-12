@@ -2,6 +2,7 @@ import {
   awsErrorMessage,
   consoleUrl,
   deleteStack,
+  deployAuthOk,
   deployConfigured,
   deployDisabled,
   getStack,
@@ -9,19 +10,22 @@ import {
 } from "@/lib/cfn-deploy";
 import { isKloudarchStack, REGION_RE } from "../schema";
 
-function guard() {
+function guard(req: Request) {
   if (deployDisabled()) {
     return Response.json({ error: "Deployments are disabled on this hosted instance." }, { status: 503 });
   }
   if (!deployConfigured()) {
     return Response.json({ error: "No AWS credentials configured." }, { status: 503 });
   }
+  if (!deployAuthOk(req)) {
+    return Response.json({ error: "Wrong or missing deploy password.", passwordRequired: true }, { status: 401 });
+  }
   return null;
 }
 
 /** Poll stack status + events (after `since`) + outputs when complete. */
 export async function GET(req: Request) {
-  const blocked = guard();
+  const blocked = guard(req);
   if (blocked) return blocked;
 
   const url = new URL(req.url);
@@ -62,7 +66,7 @@ export async function GET(req: Request) {
 
 /** Tear down the stack. */
 export async function DELETE(req: Request) {
-  const blocked = guard();
+  const blocked = guard(req);
   if (blocked) return blocked;
 
   const body = await req.json().catch(() => null);

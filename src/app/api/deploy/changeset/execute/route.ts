@@ -1,5 +1,6 @@
 import {
   awsErrorMessage,
+  deployAuthOk,
   deployConfigured,
   deployDisabled,
   executeChangeSet,
@@ -12,6 +13,9 @@ export async function POST(req: Request) {
   }
   if (!deployConfigured()) {
     return Response.json({ error: "No AWS credentials configured." }, { status: 503 });
+  }
+  if (!deployAuthOk(req)) {
+    return Response.json({ error: "Wrong or missing deploy password.", passwordRequired: true }, { status: 401 });
   }
 
   const body = await req.json().catch(() => null);

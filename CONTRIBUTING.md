@@ -18,10 +18,30 @@ The studio works with zero configuration. For the AI copilot, copy
 Before pushing:
 
 ```bash
-npm run lint && npm run build
+npm run lint && npm test && npm run build
 ```
 
-CI runs exactly those two commands on every PR.
+CI runs exactly those three commands on every PR.
+
+## Tests
+
+The generators and validators are covered by [Vitest](https://vitest.dev):
+
+```bash
+npm test          # run once
+npm run test:watch
+```
+
+`tests/` holds targeted assertions plus **golden snapshots** of every
+starter template in both IaC formats (`tests/__snapshots__/`). If you change
+a generator on purpose, review the snapshot diff and update it with:
+
+```bash
+npx vitest run -u
+```
+
+A snapshot diff you didn't expect means your change altered generated IaC for
+an existing design — read it before updating.
 
 ## Where things live
 
@@ -29,10 +49,12 @@ CI runs exactly those two commands on every PR.
 | --- | --- |
 | `src/lib/catalog.ts` | Service registry — categories, config fields, icons |
 | `src/lib/terraform.ts` | Design graph → HCL (one emitter per service) |
+| `src/lib/cloudformation.ts` | Design graph → CloudFormation JSON (deploy engine) |
 | `src/lib/validate.ts` | Design checks shown in the studio |
 | `src/lib/store.ts` | Zustand design store — history, persistence, actions |
 | `src/lib/templates.ts` | Starter architectures |
 | `src/lib/ai-bridge.ts` | AI tool calls → store mutations |
+| `tests/` | Vitest suite + golden snapshots |
 | `src/components/studio/` | Canvas, palette, inspector, panels |
 | `src/app/api/chat/route.ts` | AI SDK route (client-executed tools) |
 
@@ -41,13 +63,19 @@ CI runs exactly those two commands on every PR.
 1. **Catalog entry** in `src/lib/catalog.ts` — id, name, abbr, category,
    lucide icon, blurb, and typed config fields. That alone puts it in the
    palette, inspector, and AI catalog.
-2. **Terraform emitter** in `src/lib/terraform.ts` — add a function to
-   `EMITTERS` keyed by your service id. Use `ctx.out()` / `ctx.inn()` to wire
-   connected services and `ctx.zone()` for VPC/subnet containment. Prefer a
-   `# TODO` comment over silently emitting broken HCL.
+2. **Two emitters**, keyed by your service id in the `EMITTERS` records of
+   `src/lib/terraform.ts` (returns an HCL string) and
+   `src/lib/cloudformation.ts` (calls `ctx.res()` to add resources). Both share
+   the same `Ctx` shape — `ctx.out()` / `ctx.inn()` for connected services,
+   `ctx.zone()` for VPC/subnet containment, `ctx.once()` for shared blocks.
+   Prefer a `# TODO` / placeholder over silently emitting broken IaC.
 3. Optionally add a validation rule in `src/lib/validate.ts` if the service
    has an easy-to-miss requirement (e.g. needs a subnet, needs a target).
-4. If the AI should configure it well, make sure the field names are
+4. **A test** in `tests/` — assert the key resources/wiring your emitters
+   produce (see the existing service blocks for the pattern). Run `npm test`;
+   if you added the service to a template, update snapshots with
+   `npx vitest run -u`.
+5. If the AI should configure it well, make sure the field names are
    self-explanatory — the catalog is injected into the copilot's prompt.
 
 ## Style

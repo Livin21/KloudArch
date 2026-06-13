@@ -10,6 +10,12 @@
   and ship them — live Terraform &amp; CloudFormation, one-click deploy.
 </p>
 
+<p align="center">
+  <a href="https://github.com/Livin21/KloudArch/actions/workflows/ci.yml"><img src="https://github.com/Livin21/KloudArch/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
+  <a href="https://kloudarch.com"><img src="https://img.shields.io/badge/demo-kloudarch.com-53c7ff" alt="Live demo"></a>
+</p>
+
 > v0.3 — 27 services, routable networks, dual-format IaC, one-click deploy.
 
 ![KloudArch Studio — design a routed VPC, generate Terraform and CloudFormation, deploy from the studio](docs/demo.gif)

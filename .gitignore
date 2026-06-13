@@ -27,3 +27,6 @@ next-env.d.ts
 
 # vercel
 .vercel
+
+# Personal launch drafts — kept locally, not part of the project
+docs/launch/

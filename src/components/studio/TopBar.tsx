@@ -87,7 +87,7 @@ export default function TopBar() {
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-panel px-3">
       {/* Wordmark */}
       <Link href="/" className="pr-1" title="KloudArch home">
-        <LogoLockup markSize={24} tag="STUDIO 0.2" />
+        <LogoLockup markSize={24} tag="STUDIO 0.3" />
       </Link>
 
       <span className="h-5 w-px bg-line" />

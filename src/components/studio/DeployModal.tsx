@@ -367,12 +367,33 @@ export default function DeployModal() {
 
           {phase === "disabled" && (
             <div className="rounded-[3px] border border-accent/30 bg-accent/5 p-4">
-              <p className="u-label mb-2 !text-accent">Hosted instance — deploys off</p>
+              <p className="u-label mb-2 !text-accent">Deploy runs on your own account</p>
               <p className="text-[12px] leading-relaxed text-fg-dim">
-                Deployments are switched off on this shared instance — they would run against
-                someone else&apos;s AWS account. Self-host KloudArch with your own credentials to
-                deploy designs straight from the studio, or export the IaC below and apply it yourself.
+                On this public demo deployments are off by design — they&apos;d run
+                against someone else&apos;s AWS account. Two ways to ship this design
+                for real:
               </p>
+              <ul className="mt-2.5 space-y-1.5 text-[12px] leading-relaxed text-fg-dim">
+                <li className="flex gap-2">
+                  <span className="text-accent">1.</span>
+                  Export <span className="font-mono text-fg">template.json</span> or{" "}
+                  <span className="font-mono text-fg">main.tf</span> below and apply it
+                  with your own tooling.
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-accent">2.</span>
+                  Self-host KloudArch with your AWS credentials to deploy and tear down
+                  straight from the studio.
+                </li>
+              </ul>
+              <a
+                href="https://github.com/Livin21/KloudArch#enable-deploy-from-studio"
+                target="_blank"
+                rel="noreferrer"
+                className="u-btn mt-3 w-full justify-center !border-accent/40 !text-accent hover:!bg-accent/10 !text-[11.5px]"
+              >
+                Self-host from GitHub →
+              </a>
             </div>
           )}
 

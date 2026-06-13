@@ -137,7 +137,9 @@ export default function ChatPanel() {
               ? "bg-fg-faint"
               : meta.configured
                 ? "animate-pulse bg-ok"
-                : "bg-danger"
+                : meta.disabled
+                  ? "bg-accent"
+                  : "bg-danger"
           }`}
         />
         <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-fg-faint">
@@ -146,7 +148,7 @@ export default function ChatPanel() {
             : meta.configured
               ? `${meta.provider} · ${meta.model}`
               : meta.disabled
-                ? "copilot off on this instance"
+                ? "demo · copilot off by design"
                 : "no model configured"}
         </span>
       </div>
@@ -155,23 +157,26 @@ export default function ChatPanel() {
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3.5">
         {meta?.configured === false && meta.disabled && (
           <div className="rounded-[3px] border border-accent/30 bg-accent/5 p-3.5">
-            <p className="u-label mb-2 !text-accent">Hosted instance — copilot off</p>
+            <p className="u-label mb-2 !text-accent">Copilot runs on your own key</p>
             <p className="text-[11.5px] leading-relaxed text-fg-dim">
-              The AI copilot is switched off on this shared deployment so it
-              can&apos;t spend anyone&apos;s API credits. Everything else works —
-              canvas, templates, Terraform export.
+              On this public demo the AI copilot is off by design — a shared site
+              can&apos;t spend anyone&apos;s API credits. Everything else is fully
+              live: design on the canvas, start from a template, and watch
+              Terraform <span className="text-fg">&amp;</span> CloudFormation
+              generate as you build.
             </p>
             <p className="mt-2.5 text-[11.5px] leading-relaxed text-fg-dim">
-              To use the copilot, self-host KloudArch with your own key:
+              Run it locally to chat with the copilot — bring an Anthropic,
+              OpenAI or Google key:
             </p>
             <pre className="mt-2 overflow-x-auto rounded-[2px] border border-line bg-ink p-2.5 font-mono text-[10px] leading-relaxed text-fg-dim">
               {"git clone github.com/Livin21/KloudArch.git\ncp .env.example .env.local   # add your key\nnpm install && npm run dev"}
             </pre>
             <a
-              href="https://github.com/Livin21/KloudArch"
+              href="https://github.com/Livin21/KloudArch#enable-the-ai-copilot"
               target="_blank"
               rel="noreferrer"
-              className="u-btn mt-3 w-full justify-center !text-[11.5px]"
+              className="u-btn mt-3 w-full justify-center !border-accent/40 !text-accent hover:!bg-accent/10 !text-[11.5px]"
             >
               Self-host from GitHub →
             </a>

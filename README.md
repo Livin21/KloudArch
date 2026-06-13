@@ -7,12 +7,14 @@
 <p align="center">
   <b>Open-source cloud architecture design studio.</b><br/>
   Draft architectures on a blueprint canvas, refine them with an AI copilot,<br/>
-  and export working Terraform — all in the browser.
+  and ship them — live Terraform &amp; CloudFormation, one-click deploy.
 </p>
 
-> v0.2 — design studio + one-click deploy. Draft it, review the change set, ship it.
+> v0.3 — 27 services, routable networks, dual-format IaC, one-click deploy.
 
-![KloudArch Studio — three-tier web app template with live Terraform](docs/screenshot.png)
+![KloudArch Studio — design a routed VPC, generate Terraform and CloudFormation, deploy from the studio](docs/demo.gif)
+
+<p align="center"><sub>Design from a template · live dual-format IaC · deploy from the studio</sub></p>
 
 ## Features
 
